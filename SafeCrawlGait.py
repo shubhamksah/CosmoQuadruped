@@ -1,18 +1,6 @@
 import time
 from adafruit_servokit import ServoKit
 
-# ============================================================
-# ULTRA-SAFE QUADRUPED CRAWL GAIT
-#
-# GOALS:
-# - Minimal speed
-# - One leg moves at a time
-# - 3 legs always on ground
-# - No sudden angle changes
-#
-# THIS IS A SAFETY-FIRST GAIT
-# ============================================================
-
 kit = ServoKit(channels=16)
 
 # -----------------------------
@@ -26,8 +14,7 @@ legs = {
 }
 
 # -----------------------------
-# BASE (CALIBRATED) ANGLES
-# MUST MATCH YOUR TWEAKER OUTPUT
+# BASE ANGLES (your calibrated values)
 # -----------------------------
 base = {
     "FL": {"H": 100, "F": 141, "T": 90},
@@ -36,104 +23,125 @@ base = {
     "BR": {"H": 94,  "F": 42,  "T": 91}
 }
 
-# Copy base into live state
 angles = {leg: base[leg].copy() for leg in base}
 
 # -----------------------------
-# SAFETY LIMITS
+# VERY CONSERVATIVE PARAMETERS
 # -----------------------------
-TIBIA_LIFT = 8      # degrees to lift foot (SMALL)
-FEMUR_STEP = 6     # degrees forward step (SMALL)
-STEP_DELAY = 0.35  # seconds (SLOW)
-MICRO_DELAY = 0.02 # smooth servo motion
+BODY_LOWER = 4      # lower entire body to reduce torque
+TIBIA_LIFT = 4      # tiny lift
+FEMUR_STEP = 4      # tiny step
+HIP_SHIFT = 3       # tiny weight shift
+
+MICRO_DELAY = 0.03
+PHASE_DELAY = 0.5
 
 # -----------------------------
-# Apply initial pose
+def move_smooth(leg, joint, target):
+    idx = legs[leg][joint]
+    current = angles[leg][joint]
+    step = 1 if target > current else -1
+
+    for a in range(current, target, step):
+        kit.servo[idx].angle = a
+        time.sleep(MICRO_DELAY)
+
+    kit.servo[idx].angle = target
+    angles[leg][joint] = target
+
+# -----------------------------
+# Apply pose
 # -----------------------------
 def apply_pose():
     for leg in legs:
         for joint in legs[leg]:
             kit.servo[legs[leg][joint]].angle = angles[leg][joint]
-            time.sleep(MICRO_DELAY)
+            time.sleep(0.01)
 
 # -----------------------------
-# Move a servo smoothly
+# Lower entire robot (safety)
 # -----------------------------
-def move_smooth(leg, joint, target):
-    idx = legs[leg][joint]
-    current = angles[leg][joint]
-
-    step = 1 if target > current else -1
-    for angle in range(current, target, step):
-        kit.servo[idx].angle = angle
-        time.sleep(MICRO_DELAY)
-
-    angles[leg][joint] = target
-    kit.servo[idx].angle = target
+def lower_body():
+    for leg in legs:
+        move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER)
 
 # -----------------------------
-# Lift leg (tibia compress)
+# Reset body height
+# -----------------------------
+def reset_body():
+    for leg in legs:
+        move_smooth(leg, "T", base[leg]["T"])
+
+# -----------------------------
+# Shift weight BEFORE lifting
+# -----------------------------
+def shift_weight(leg):
+    if leg in ["FL", "BL"]:
+        move_smooth(leg, "H", base[leg]["H"] + HIP_SHIFT)
+    else:
+        move_smooth(leg, "H", base[leg]["H"] - HIP_SHIFT)
+
+# -----------------------------
+def unshift_weight(leg):
+    move_smooth(leg, "H", base[leg]["H"])
+
 # -----------------------------
 def lift_leg(leg):
-    move_smooth(leg, "T", base[leg]["T"] - TIBIA_LIFT)
+    move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER - TIBIA_LIFT)
 
-# -----------------------------
-# Lower leg (tibia extend)
 # -----------------------------
 def lower_leg(leg):
-    move_smooth(leg, "T", base[leg]["T"])
+    move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER)
 
 # -----------------------------
-# Swing leg forward
-# -----------------------------
-def swing_leg_forward(leg):
+def swing_leg(leg):
     if leg in ["FL", "BL"]:
-        target = base[leg]["F"] - FEMUR_STEP
+        move_smooth(leg, "F", base[leg]["F"] - FEMUR_STEP)
     else:
-        target = base[leg]["F"] + FEMUR_STEP
+        move_smooth(leg, "F", base[leg]["F"] + FEMUR_STEP)
 
-    move_smooth(leg, "F", target)
-
-# -----------------------------
-# Return femur to neutral
 # -----------------------------
 def reset_femur(leg):
     move_smooth(leg, "F", base[leg]["F"])
 
 # -----------------------------
-# ONE SAFE STEP
-# -----------------------------
 def step_leg(leg):
-    lift_leg(leg)
-    time.sleep(STEP_DELAY)
+    shift_weight(leg)
+    time.sleep(PHASE_DELAY)
 
-    swing_leg_forward(leg)
-    time.sleep(STEP_DELAY)
+    lift_leg(leg)
+    time.sleep(PHASE_DELAY)
+
+    swing_leg(leg)
+    time.sleep(PHASE_DELAY)
 
     lower_leg(leg)
-    time.sleep(STEP_DELAY)
+    time.sleep(PHASE_DELAY)
 
     reset_femur(leg)
-    time.sleep(STEP_DELAY)
+    time.sleep(PHASE_DELAY)
+
+    unshift_weight(leg)
+    time.sleep(PHASE_DELAY)
 
 # -----------------------------
-# MAIN GAIT LOOP
-# -----------------------------
 def crawl_gait():
-    print("Starting SAFE crawl gait")
+    print("SAFE CRAWL GAIT V2")
     print("Ctrl+C to stop")
 
     try:
+        lower_body()
+        time.sleep(1)
+
         while True:
             for leg in ["FL", "BR", "FR", "BL"]:
                 step_leg(leg)
 
     except KeyboardInterrupt:
         print("\nStopping safely")
+        reset_body()
         apply_pose()
 
-# -----------------------------
-# START
 # -----------------------------
 apply_pose()
 time.sleep(1)
