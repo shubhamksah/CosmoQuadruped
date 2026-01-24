@@ -20,10 +20,10 @@ legs = {
 # Change these values after calibrating with tweaker
 # =========================
 base_angles = {
-    "FL": {"H": 95, "T": 92, "F": 88},
-    "FR": {"H": 85, "T": 90, "F": 93},
-    "BL": {"H": 90, "T": 91, "F": 90},
-    "BR": {"H": 92, "T": 90, "F": 87}
+    "FL": {"H": 100, "T": 90, "F": 90},
+    "FR": {"H": 88, "T": 90, "F": 90},
+    "BL": {"H": 96, "T": 90, "F": 90},
+    "BR": {"H": 94, "T": 90, "F": 90}
 }
 
 # Initialize angles to base positions
