@@ -27,15 +27,15 @@ base = {
 angles = {leg: base[leg].copy() for leg in base}
 
 # -----------------------------
-# SAFE PARAMETERS (V3)
+# SAFE PARAMETERS (V4)
 # -----------------------------
-BODY_LOWER = 4      # lowers body slightly to reduce torque
-TIBIA_LIFT = 8      # bigger lift for visible movement
-FEMUR_STEP = 8      # bigger step forward/back
-HIP_SHIFT = 5       # bigger weight shift for unloading
+BODY_LOWER = 4      # lowers body slightly for less torque
+TIBIA_LIFT = 12     # slightly bigger lift to start translating forward
+FEMUR_STEP = 12     # slightly bigger swing to push forward
+HIP_SHIFT = 7       # bigger shift to unload leg
 
-MICRO_DELAY = 0.03
-PHASE_DELAY = 0.5
+MICRO_DELAY = 0.02
+PHASE_DELAY = 0.3   # slightly faster for forward motion
 
 # -----------------------------
 # Smooth motion helper
@@ -62,19 +62,18 @@ def apply_pose():
             time.sleep(0.01)
 
 # -----------------------------
-# Lower entire robot for safety
+# Lower entire robot safely
 # -----------------------------
 def lower_body():
     for leg in legs:
         move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER)
 
-# Reset body height
 def reset_body():
     for leg in legs:
         move_smooth(leg, "T", base[leg]["T"])
 
 # -----------------------------
-# Shift weight onto 3 legs before lifting
+# Shift weight for leg lift
 # -----------------------------
 def shift_weight(leg):
     if leg in ["FL", "BL"]:
@@ -86,7 +85,7 @@ def unshift_weight(leg):
     move_smooth(leg, "H", base[leg]["H"])
 
 # -----------------------------
-# Lift leg safely
+# Lift / lower leg
 # -----------------------------
 def lift_leg(leg):
     move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER - TIBIA_LIFT)
@@ -95,7 +94,7 @@ def lower_leg(leg):
     move_smooth(leg, "T", base[leg]["T"] - BODY_LOWER)
 
 # -----------------------------
-# Move femur for stepping
+# Swing femur for stepping
 # -----------------------------
 def swing_leg(leg):
     if leg in ["FL", "BL"]:
@@ -107,7 +106,7 @@ def reset_femur(leg):
     move_smooth(leg, "F", base[leg]["F"])
 
 # -----------------------------
-# Full step sequence for one leg
+# Step sequence for one leg
 # -----------------------------
 def step_leg(leg):
     shift_weight(leg)
@@ -132,7 +131,7 @@ def step_leg(leg):
 # Main crawl gait
 # -----------------------------
 def crawl_gait():
-    print("SAFE CRAWL GAIT V3 — VERY SLOW, SAFE")
+    print("SAFE FORWARD CRAWL GAIT V4 — SLOW AND STABLE")
     print("Ctrl+C to stop")
 
     try:
@@ -140,7 +139,8 @@ def crawl_gait():
         time.sleep(1)
 
         while True:
-            # Order chosen for balance: FL → BR → FR → BL
+            # Order chosen for maximum stability:
+            # Front-left → Back-right → Front-right → Back-left
             for leg in ["FL", "BR", "FR", "BL"]:
                 step_leg(leg)
 
@@ -149,6 +149,8 @@ def crawl_gait():
         reset_body()
         apply_pose()
 
+# -----------------------------
+# Start
 # -----------------------------
 apply_pose()
 time.sleep(1)
