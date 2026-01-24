@@ -7,7 +7,7 @@ import termios
 # Initialize ServoKit for 16 channels
 kit = ServoKit(channels=16)
 
-# Map legs and joints
+# Map legs and joints (H = hip, T = thigh, F = foot)
 legs = {
     "FL": {"H": 2, "T": 0, "F": 1},
     "FR": {"H": 5, "T": 3, "F": 4},
@@ -15,8 +15,8 @@ legs = {
     "BR": {"H": 11, "T": 9, "F": 10}
 }
 
-# Store current angles for each servo
-angles = {servo: 90 for leg in legs.values() for servo in leg.values()}
+# Initialize angles (degrees, 0-180)
+angles = {leg: {joint: 90 for joint in joints} for leg, joints in legs.items()}
 
 # Function to read single keypress (arrow keys included)
 def get_key():
@@ -34,31 +34,34 @@ def get_key():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-# Function to tweak a single servo
-def tweak_servo(servo_index):
-    print(f"Adjusting servo {servo_index}. Use ↑/↓ to move, q to quit this servo.")
+# Function to tweak a single servo with correct feedback
+def tweak_servo(leg, joint, servo_index):
+    print(f"\nTweaking {leg} {joint} (servo {servo_index})")
+    print("Use ↑ to increase, ↓ to decrease, q to finish this joint\n")
+    
     while True:
         key = get_key()
         if key == "\x1b[A":  # Up arrow
-            if angles[servo_index] < 180:
-                angles[servo_index] += 1
-                kit.servo[servo_index].angle = angles[servo_index]
+            if angles[leg][joint] < 180:
+                angles[leg][joint] += 1
+                kit.servo[servo_index].angle = angles[leg][joint]
         elif key == "\x1b[B":  # Down arrow
-            if angles[servo_index] > 0:
-                angles[servo_index] -= 1
-                kit.servo[servo_index].angle = angles[servo_index]
+            if angles[leg][joint] > 0:
+                angles[leg][joint] -= 1
+                kit.servo[servo_index].angle = angles[leg][joint]
         elif key.lower() == "q":
-            print(f"Done tweaking servo {servo_index}.")
+            print(f"\nFinished {leg} {joint} at {angles[leg][joint]}°\n")
             break
-        print(f"Servo {servo_index} angle: {angles[servo_index]}", end="\r")
+        
+        # Live feedback
+        print(f"{leg} {joint} angle: {angles[leg][joint]}°   ", end="\r")
 
 # Main program
 def main():
-    print("Quadruped Joint Tweaker")
-    print("Available legs: FL, FR, BL, BR")
-    print("Available joints: H (hip), T (thigh), F (foot)")
+    print("Quadruped Joint Tweaker (Degrees Feedback)")
+    print("Legs: FL, FR, BL, BR | Joints: H (hip), T (thigh), F (foot)")
     print("Type 'exit' at any prompt to quit.\n")
-
+    
     try:
         while True:
             leg = input("Enter leg: ").upper()
@@ -71,16 +74,21 @@ def main():
             joint = input("Enter joint (H/T/F): ").upper()
             if joint == "EXIT":
                 break
-            if joint not in ["H", "T", "F"]:
+            if joint not in ["H","T","F"]:
                 print("Invalid joint. Try again.")
                 continue
 
             servo_index = legs[leg][joint]
-            tweak_servo(servo_index)
-
+            tweak_servo(leg, joint, servo_index)
+    
     except KeyboardInterrupt:
         print("\nExiting program.")
 
+    # Print all final calibrated angles
+    print("\nFinal calibrated angles (degrees):")
+    for leg_name, joints in angles.items():
+        for joint_name, angle in joints.items():
+            print(f"{leg_name} {joint_name}: {angle}°")
+
 if __name__ == "__main__":
     main()
-
