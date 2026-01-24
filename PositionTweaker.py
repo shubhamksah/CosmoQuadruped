@@ -21,10 +21,10 @@ legs = {
 # These should match REAL straight joints
 # =========================
 base_angles = {
-    "FL": {"H": 100, "F": 96, "T": 90},
-    "FR": {"H": 88,  "F": 92, "T": 90},
-    "BL": {"H": 96,  "F": 88, "T": 90},
-    "BR": {"H": 94,  "F": 87, "T": 90}
+    "FL": {"H": 100, "F": (96 + 45), "T": 90},
+    "FR": {"H": 88,  "F": (92 - 45), "T": 90},
+    "BL": {"H": 96,  "F": (88 + 45), "T": 90},
+    "BR": {"H": 94,  "F": (87 - 45), "T": 90}
 }
 
 # Initialize angles to base positions
