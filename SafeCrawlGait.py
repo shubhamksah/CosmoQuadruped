@@ -15,31 +15,28 @@ legs = {
 }
 
 # -----------------------------
-# Base angles (physically straight, calibrated)
+# Base angles (physically straight)
 # -----------------------------
 base = {
-    "FL": {"H": 100, "F": 141, "T": 90},  # FL: hip clockwise+, femur back+, tibia down+ (standing taller)
-    "FR": {"H": 88,  "F": 47,  "T": 82},  # FR: hip clockwise+, femur forward+, tibia up+
-    "BL": {"H": 96,  "F": 133, "T": 85},  # BL: hip counter+, femur back+, tibia down+
-    "BR": {"H": 94,  "F": 42,  "T": 91}   # BR: hip counter+, femur forward+, tibia up+
+    "FL": {"H": 100, "F": 141, "T": 90},
+    "FR": {"H": 88,  "F": 47,  "T": 82},
+    "BL": {"H": 96,  "F": 133, "T": 85},
+    "BR": {"H": 94,  "F": 42,  "T": 91}
 }
 
 angles = {leg: base[leg].copy() for leg in base}
 
 # -----------------------------
-# Per-leg SAFE PARAMETERS (V6)
+# Safe per-leg parameters (V7)
 # -----------------------------
-# Each leg has its own tibia lift, femur step, hip shift
-# Adjusted for uneven left/right lift and front-right lockout
 params = {
-    "FL": {"TIBIA_LIFT": 18, "FEMUR_STEP": 22, "HIP_SHIFT": 7,  "MAX_TIBIA": 110}, # slightly higher lift
-    "FR": {"TIBIA_LIFT": 12, "FEMUR_STEP": 18, "HIP_SHIFT": 6,  "MAX_TIBIA": 86},  # protect front-right from lockout
-    "BL": {"TIBIA_LIFT": 18, "FEMUR_STEP": 22, "HIP_SHIFT": 7,  "MAX_TIBIA": 103}, # similar to FL
-    "BR": {"TIBIA_LIFT": 12, "FEMUR_STEP": 20, "HIP_SHIFT": 6,  "MAX_TIBIA": 105}  # slightly lower lift
+    "FL": {"TIBIA_LIFT": 18, "FEMUR_SWING": 30, "HIP_SHIFT": 12, "MAX_TIBIA": 110},
+    "FR": {"TIBIA_LIFT": 12, "FEMUR_SWING": 25, "HIP_SHIFT": 10, "MAX_TIBIA": 86},
+    "BL": {"TIBIA_LIFT": 18, "FEMUR_SWING": 30, "HIP_SHIFT": 12, "MAX_TIBIA": 103},
+    "BR": {"TIBIA_LIFT": 12, "FEMUR_SWING": 25, "HIP_SHIFT": 10, "MAX_TIBIA": 105}
 }
 
-BODY_LOWER = 2  # global lowering for stability
-
+BODY_LOWER = 2
 MICRO_DELAY = 0.015
 PHASE_DELAY = 0.25  # slow crawl
 
@@ -85,7 +82,7 @@ def shift_weight(leg):
     direction = params[leg]["HIP_SHIFT"]
     if leg in ["FL", "FR"]:
         move_smooth(leg, "H", base[leg]["H"] + direction)
-    else:  # back legs shift opposite
+    else:
         move_smooth(leg, "H", base[leg]["H"] - direction)
 
 def unshift_weight(leg):
@@ -98,7 +95,7 @@ def lift_leg(leg):
     tibia_lift = params[leg]["TIBIA_LIFT"]
     max_tibia = params[leg]["MAX_TIBIA"]
     target = angles[leg]["T"] - tibia_lift
-    # safety clamp to avoid lockout
+    # Safety clamp to avoid lockout
     target = max(min(target, max_tibia), 0)
     move_smooth(leg, "T", target)
 
@@ -110,11 +107,13 @@ def lower_leg(leg):
 # Swing femur for stepping
 # -----------------------------
 def swing_leg(leg):
-    femur_step = params[leg]["FEMUR_STEP"]
+    swing = params[leg]["FEMUR_SWING"]
     if leg in ["FL", "BL"]:
-        move_smooth(leg, "F", base[leg]["F"] - femur_step)  # back push
+        # Back legs push back, front-left pushes backward slightly for crawl
+        move_smooth(leg, "F", base[leg]["F"] - swing)
     else:
-        move_smooth(leg, "F", base[leg]["F"] + femur_step)  # forward push
+        # Front-right and back-right push forward
+        move_smooth(leg, "F", base[leg]["F"] + swing)
 
 def reset_femur(leg):
     move_smooth(leg, "F", base[leg]["F"])
@@ -145,7 +144,7 @@ def step_leg(leg):
 # Crawl gait main loop
 # -----------------------------
 def crawl_gait():
-    print("SAFE ADJUSTABLE CRAWL GAIT V6 — SLOW AND STABLE")
+    print("SAFE TRANSLATING CRAWL GAIT V7 — SLOW AND BALANCED")
     print("Ctrl+C to stop")
 
     try:
@@ -153,8 +152,8 @@ def crawl_gait():
         time.sleep(1)
 
         while True:
-            # Sequential crawl order for stability:
-            # Front-left → Back-right → Front-right → Back-left
+            # Sequential crawl order for stability
+            # FL -> BR -> FR -> BL
             for leg in ["FL", "BR", "FR", "BL"]:
                 step_leg(leg)
 
