@@ -15,8 +15,24 @@ legs = {
     "BR": {"H": 11, "T": 9, "F": 10}
 }
 
-# Initialize angles (degrees, 0-180)
-angles = {leg: {joint: 90 for joint in joints} for leg, joints in legs.items()}
+# =========================
+# Base angles (physically straight)
+# Change these values after calibrating with tweaker
+# =========================
+base_angles = {
+    "FL": {"H": 95, "T": 92, "F": 88},
+    "FR": {"H": 85, "T": 90, "F": 93},
+    "BL": {"H": 90, "T": 91, "F": 90},
+    "BR": {"H": 92, "T": 90, "F": 87}
+}
+
+# Initialize angles to base positions
+angles = {leg: {joint: base_angles[leg][joint] for joint in joints} for leg, joints in legs.items()}
+
+# Apply base angles to servos at program start
+for leg_name, joints in legs.items():
+    for joint_name, servo_index in joints.items():
+        kit.servo[servo_index].angle = angles[leg_name][joint_name]
 
 # Function to read single keypress (arrow keys included)
 def get_key():
@@ -34,7 +50,7 @@ def get_key():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-# Function to tweak a single servo with correct feedback
+# Function to tweak a single servo with live feedback
 def tweak_servo(leg, joint, servo_index):
     print(f"\nTweaking {leg} {joint} (servo {servo_index})")
     print("Use ↑ to increase, ↓ to decrease, q to finish this joint\n")
@@ -58,7 +74,7 @@ def tweak_servo(leg, joint, servo_index):
 
 # Main program
 def main():
-    print("Quadruped Joint Tweaker (Degrees Feedback)")
+    print("Quadruped Joint Tweaker with Base Angles")
     print("Legs: FL, FR, BL, BR | Joints: H (hip), T (thigh), F (foot)")
     print("Type 'exit' at any prompt to quit.\n")
     
@@ -84,7 +100,7 @@ def main():
     except KeyboardInterrupt:
         print("\nExiting program.")
 
-    # Print all final calibrated angles
+    # Print final angles
     print("\nFinal calibrated angles (degrees):")
     for leg_name, joints in angles.items():
         for joint_name, angle in joints.items():
