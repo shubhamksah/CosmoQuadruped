@@ -7,104 +7,104 @@ import termios
 # Initialize ServoKit for 16 channels
 kit = ServoKit(channels=16)
 
-# Map legs and joints (H = hip, T = thigh, F = foot)
+# Map legs and joints
+# H = Hip, F = Femur, T = Tibia
 legs = {
-    "FL": {"H": 2, "T": 0, "F": 1},
-    "FR": {"H": 5, "T": 3, "F": 4},
-    "BL": {"H": 8, "T": 6, "F": 7},
-    "BR": {"H": 11, "T": 9, "F": 10}
+    "FL": {"H": 2, "F": 1, "T": 0},
+    "FR": {"H": 5, "F": 4, "T": 3},
+    "BL": {"H": 8, "F": 7, "T": 6},
+    "BR": {"H": 11, "F": 10, "T": 9}
 }
 
 # =========================
 # Base angles (physically straight)
-# Change these values after calibrating with tweaker
+# These should match REAL straight joints
 # =========================
 base_angles = {
-    "FL": {"H": 100, "T": 90, "F": 90},
-    "FR": {"H": 88, "T": 90, "F": 90},
-    "BL": {"H": 96, "T": 90, "F": 90},
-    "BR": {"H": 94, "T": 90, "F": 90}
+    "FL": {"H": 100, "F": 96, "T": 90},
+    "FR": {"H": 88,  "F": 92, "T": 90},
+    "BL": {"H": 96,  "F": 88, "T": 90},
+    "BR": {"H": 94,  "F": 87, "T": 90}
 }
 
 # Initialize angles to base positions
-angles = {leg: {joint: base_angles[leg][joint] for joint in joints} for leg, joints in legs.items()}
+angles = {
+    leg: {joint: base_angles[leg][joint] for joint in joints}
+    for leg, joints in legs.items()
+}
 
-# Apply base angles to servos at program start
+# Apply base angles at startup
 for leg_name, joints in legs.items():
     for joint_name, servo_index in joints.items():
         kit.servo[servo_index].angle = angles[leg_name][joint_name]
 
-# Function to read single keypress (arrow keys included)
+# Read single keypress (arrow keys)
 def get_key():
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
         ch1 = sys.stdin.read(1)
-        if ch1 == "\x1b":  # arrow keys start with escape
+        if ch1 == "\x1b":
             ch2 = sys.stdin.read(1)
             ch3 = sys.stdin.read(1)
             return ch1 + ch2 + ch3
-        else:
-            return ch1
+        return ch1
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-# Function to tweak a single servo with live feedback
+# Tweak one joint with live feedback
 def tweak_servo(leg, joint, servo_index):
     print(f"\nTweaking {leg} {joint} (servo {servo_index})")
-    print("Use ↑ to increase, ↓ to decrease, q to finish this joint\n")
-    
+    print("↑ increase | ↓ decrease | q = done\n")
+
     while True:
         key = get_key()
-        if key == "\x1b[A":  # Up arrow
-            if angles[leg][joint] < 180:
-                angles[leg][joint] += 1
-                kit.servo[servo_index].angle = angles[leg][joint]
-        elif key == "\x1b[B":  # Down arrow
-            if angles[leg][joint] > 0:
-                angles[leg][joint] -= 1
-                kit.servo[servo_index].angle = angles[leg][joint]
+
+        if key == "\x1b[A" and angles[leg][joint] < 180:
+            angles[leg][joint] += 1
+        elif key == "\x1b[B" and angles[leg][joint] > 0:
+            angles[leg][joint] -= 1
         elif key.lower() == "q":
-            print(f"\nFinished {leg} {joint} at {angles[leg][joint]}°\n")
+            print(f"\nFinal {leg} {joint}: {angles[leg][joint]}°\n")
             break
-        
-        # Live feedback
+
+        kit.servo[servo_index].angle = angles[leg][joint]
         print(f"{leg} {joint} angle: {angles[leg][joint]}°   ", end="\r")
 
-# Main program
+# Main loop
 def main():
-    print("Quadruped Joint Tweaker with Base Angles")
-    print("Legs: FL, FR, BL, BR | Joints: H (hip), T (thigh), F (foot)")
-    print("Type 'exit' at any prompt to quit.\n")
-    
+    print("Quadruped Joint Tweaker (Anatomically Correct)")
+    print("Legs: FL FR BL BR")
+    print("Joints: H = Hip | F = Femur | T = Tibia")
+    print("Type 'exit' to quit\n")
+
     try:
         while True:
-            leg = input("Enter leg: ").upper()
+            leg = input("Leg: ").upper()
             if leg == "EXIT":
                 break
             if leg not in legs:
-                print("Invalid leg. Try again.")
+                print("Invalid leg")
                 continue
 
-            joint = input("Enter joint (H/T/F): ").upper()
+            joint = input("Joint (H/F/T): ").upper()
             if joint == "EXIT":
                 break
-            if joint not in ["H","T","F"]:
-                print("Invalid joint. Try again.")
+            if joint not in legs[leg]:
+                print("Invalid joint")
                 continue
 
-            servo_index = legs[leg][joint]
-            tweak_servo(leg, joint, servo_index)
-    
-    except KeyboardInterrupt:
-        print("\nExiting program.")
+            tweak_servo(leg, joint, legs[leg][joint])
 
-    # Print final angles
-    print("\nFinal calibrated angles (degrees):")
-    for leg_name, joints in angles.items():
-        for joint_name, angle in joints.items():
-            print(f"{leg_name} {joint_name}: {angle}°")
+    except KeyboardInterrupt:
+        print("\nExiting...")
+
+    # Print final calibration
+    print("\nFinal calibrated base angles:")
+    for leg in angles:
+        for joint in angles[leg]:
+            print(f"{leg} {joint}: {angles[leg][joint]}°")
 
 if __name__ == "__main__":
     main()
