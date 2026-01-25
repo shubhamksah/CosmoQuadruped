@@ -198,6 +198,7 @@ def main():
     print("Perspective: FROM BEHIND, looking toward head")
     print("Legs: FL FR BL BR")
     print("Joints: H = Hip | F = Femur | T = Tibia")
+    print("Group Movement: ALL_T for Tibias, ALL_F for Femurs, ALL_H for Hips")
     print("Type 'exit' to quit\n")
 
     try:
