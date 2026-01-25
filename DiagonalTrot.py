@@ -14,7 +14,7 @@ legs = {
 }
 
 # ------------------------------------------------------------
-# YOUR BASE ANGLES
+# BASE ANGLES
 # ------------------------------------------------------------
 base = {
     "FL": {"H": 100, "F": 141, "T": 132},
@@ -35,88 +35,83 @@ for leg in legs:
 time.sleep(1)
 
 # ------------------------------------------------------------
-# SIGN MAPS (CRITICAL)
+# SIGN MAPS
 # ------------------------------------------------------------
-FEMUR_SIGN = {
-    "FL": +1, "BL": +1,
-    "FR": -1, "BR": -1
-}
-
-TIBIA_SIGN = {
-    "FL": -1, "BL": -1,
-    "FR": +1, "BR": +1
-}
+FEMUR_SIGN = {"FL": +1, "BL": +1, "FR": -1, "BR": -1}
+TIBIA_SIGN = {"FL": -1, "BL": -1, "FR": +1, "BR": +1}
 
 # ------------------------------------------------------------
-# GAIT PARAMETERS (REAL MOTION)
+# GAIT PARAMETERS
 # ------------------------------------------------------------
-FEMUR_PUSH = 18      # THIS is what moves the robot
-TIBIA_COMP = 0.6     # poor-man’s IK ratio
+FEMUR_PUSH = 18
+TIBIA_COMP = 0.6
 LIFT_TIBIA = 14
 
 SUB = 10
 DT = 0.025
 
 # ------------------------------------------------------------
-def move_joint(leg, joint, delta):
-    step = delta / SUB
-    for _ in range(SUB):
-        angles[leg][joint] += step
-        kit.servo[legs[leg][joint]].angle = angles[leg][joint]
-        time.sleep(DT)
+# SYNC JOINT MOVEMENT
+# ------------------------------------------------------------
+def move_joints_sync(joint_moves, steps=SUB, dt=DT):
+    step_deltas = [(leg, joint, delta / steps) for leg, joint, delta in joint_moves]
+    for _ in range(steps):
+        for leg, joint, step in step_deltas:
+            angles[leg][joint] += step
+            kit.servo[legs[leg][joint]].angle = angles[leg][joint]
+        time.sleep(dt)
 
 # ------------------------------------------------------------
-# FOOT STRAIGHT BACK (ON GROUND)
+# FOOT PUSH ON GROUND
 # ------------------------------------------------------------
-def push_leg(leg):
-    df = FEMUR_SIGN[leg] * FEMUR_PUSH
-    dt = TIBIA_SIGN[leg] * (-TIBIA_COMP * FEMUR_PUSH)
-
-    move_joint(leg, "F", df)
-    move_joint(leg, "T", dt)
-
-# ------------------------------------------------------------
-# FOOT LIFT + RETURN
-# ------------------------------------------------------------
-def lift_leg(leg):
-    move_joint(leg, "T", TIBIA_SIGN[leg] * LIFT_TIBIA)
-
-def drop_leg(leg):
-    move_joint(leg, "T", -TIBIA_SIGN[leg] * LIFT_TIBIA)
-
-def return_leg(leg):
-    df = -FEMUR_SIGN[leg] * FEMUR_PUSH
-    dt = TIBIA_SIGN[leg] * (TIBIA_COMP * FEMUR_PUSH)
-
-    move_joint(leg, "F", df)
-    move_joint(leg, "T", dt)
+def push_legs(legs_to_push):
+    joint_moves = []
+    for leg in legs_to_push:
+        df = FEMUR_SIGN[leg] * FEMUR_PUSH
+        dt = TIBIA_SIGN[leg] * (-TIBIA_COMP * FEMUR_PUSH)
+        joint_moves.append((leg, "F", df))
+        joint_moves.append((leg, "T", dt))
+    move_joints_sync(joint_moves)
 
 # ------------------------------------------------------------
-# DIAGONAL STEP — PERFECT SYNC
+# LIFT, DROP, RETURN
+# ------------------------------------------------------------
+def lift_legs(legs_to_lift):
+    joint_moves = [(leg, "T", TIBIA_SIGN[leg] * LIFT_TIBIA) for leg in legs_to_lift]
+    move_joints_sync(joint_moves)
+
+def drop_legs(legs_to_lift):
+    joint_moves = [(leg, "T", -TIBIA_SIGN[leg] * LIFT_TIBIA) for leg in legs_to_lift]
+    move_joints_sync(joint_moves)
+
+def return_legs(legs_to_lift):
+    joint_moves = []
+    for leg in legs_to_lift:
+        df = -FEMUR_SIGN[leg] * FEMUR_PUSH
+        dt = TIBIA_SIGN[leg] * (TIBIA_COMP * FEMUR_PUSH)
+        joint_moves.append((leg, "F", df))
+        joint_moves.append((leg, "T", dt))
+    move_joints_sync(joint_moves)
+
+# ------------------------------------------------------------
+# DIAGONAL STEP
 # ------------------------------------------------------------
 def diagonal_step(pair_push, pair_lift):
-    # Lift diagonal
-    for leg in pair_lift:
-        lift_leg(leg)
+    lift_legs(pair_lift)
+    push_legs(pair_push)
+    drop_legs(pair_lift)
+    return_legs(pair_lift)
 
-    # Push grounded diagonal (IN SYNC)
-    for leg in pair_push:
-        push_leg(leg)
-
-    # Drop lifted legs
-    for leg in pair_lift:
-        drop_leg(leg)
-
-    # Return lifted legs forward
-    for leg in pair_lift:
-        return_leg(leg)
-
+# ------------------------------------------------------------
+# WALK FUNCTION
 # ------------------------------------------------------------
 def walk(steps=6):
     for _ in range(steps):
         diagonal_step(["FR", "BL"], ["FL", "BR"])
         diagonal_step(["FL", "BR"], ["FR", "BL"])
 
+# ------------------------------------------------------------
+# RUN
 # ------------------------------------------------------------
 try:
     walk(steps=10)
