@@ -1,14 +1,6 @@
 import time
 from adafruit_servokit import ServoKit
 
-# ============================================================
-# DIAGONAL TROT GAIT (SAFE VERSION)
-# ============================================================
-# - Uses calibrated neutral angles
-# - Opposite corners move together
-# - Slow, smooth, conservative motion
-# ============================================================
-
 kit = ServoKit(channels=16)
 
 # ------------------------------------------------------------
@@ -22,22 +14,22 @@ legs = {
 }
 
 # ------------------------------------------------------------
-# CALIBRATED NEUTRAL ANGLES (FROM YOUR TOOL)
+# NEW CALIBRATED BASE ANGLES (YOUR VALUES)
 # ------------------------------------------------------------
 base_angles = {
-    "FL": {"H": 100, "F": 141, "T": 90},
-    "FR": {"H": 88,  "F": 47,  "T": 82},
-    "BL": {"H": 96,  "F": 133, "T": 85},
-    "BR": {"H": 94,  "F": 42,  "T": 91}
+    "FL": {"H": 100, "F": 141, "T": 132},
+    "FR": {"H": 88,  "F": 47,  "T": 40},
+    "BL": {"H": 96,  "F": 133, "T": 127},
+    "BR": {"H": 94,  "F": 42,  "T": 49}
 }
 
 angles = {
-    leg: {joint: base_angles[leg][joint] for joint in base_angles[leg]}
+    leg: {j: base_angles[leg][j] for j in base_angles[leg]}
     for leg in base_angles
 }
 
 # ------------------------------------------------------------
-# APPLY NEUTRAL POSE
+# APPLY NEUTRAL
 # ------------------------------------------------------------
 for leg in legs:
     for joint in legs[leg]:
@@ -46,39 +38,54 @@ for leg in legs:
 time.sleep(1)
 
 # ------------------------------------------------------------
-# GAIT TUNING (SAFE VALUES)
+# TIBIA DIRECTION MAP (THIS FIXES EVERYTHING)
 # ------------------------------------------------------------
-STEP_FEMUR = 8     # push amount
-LIFT_TIBIA = 10    # lift amount
-SUBSTEPS   = 10
-STEP_TIME  = 0.03
+TIBIA_LIFT_SIGN = {
+    "FL": -1,
+    "BL": -1,
+    "FR": +1,
+    "BR": +1
+}
 
 # ------------------------------------------------------------
-# SMOOTH MOTION HELPER
+# SAFE GAIT PARAMETERS
+# ------------------------------------------------------------
+STEP_FEMUR = 6     # push amount
+LIFT_TIBIA = 7     # lift amount (small on purpose)
+SUBSTEPS   = 12
+DT         = 0.03
+
+# ------------------------------------------------------------
+# SMOOTH MOVE
 # ------------------------------------------------------------
 def smooth_move(leg, joint, delta):
     step = delta / SUBSTEPS
     for _ in range(SUBSTEPS):
         angles[leg][joint] += step
         kit.servo[legs[leg][joint]].angle = angles[leg][joint]
-        time.sleep(STEP_TIME)
+        time.sleep(DT)
 
 # ------------------------------------------------------------
 # LEG ACTIONS
 # ------------------------------------------------------------
 def lift_leg(leg):
-    # tibia flexes → foot up
-    smooth_move(leg, "T", -LIFT_TIBIA)
+    smooth_move(
+        leg,
+        "T",
+        TIBIA_LIFT_SIGN[leg] * LIFT_TIBIA
+    )
 
 def lower_leg(leg):
-    # tibia extends → foot down
-    smooth_move(leg, "T", LIFT_TIBIA)
+    smooth_move(
+        leg,
+        "T",
+        -TIBIA_LIFT_SIGN[leg] * LIFT_TIBIA
+    )
 
 def push_leg(leg):
-    # femur swings back → body forward
     smooth_move(leg, "F", STEP_FEMUR)
 
-def reset_femur(leg):
+def reset_leg(leg):
     smooth_move(leg, "F", -STEP_FEMUR)
 
 # ------------------------------------------------------------
@@ -101,7 +108,7 @@ def diagonal_step(lift_legs, push_legs):
     time.sleep(0.05)
 
     for leg in push_legs:
-        reset_femur(leg)
+        reset_leg(leg)
 
     time.sleep(0.1)
 
@@ -110,15 +117,8 @@ def diagonal_step(lift_legs, push_legs):
 # ------------------------------------------------------------
 def walk_forward(steps=10):
     for _ in range(steps):
-        diagonal_step(
-            lift_legs=["FL", "BR"],
-            push_legs=["FR", "BL"]
-        )
-
-        diagonal_step(
-            lift_legs=["FR", "BL"],
-            push_legs=["FL", "BR"]
-        )
+        diagonal_step(["FL", "BR"], ["FR", "BL"])
+        diagonal_step(["FR", "BL"], ["FL", "BR"])
 
 # ------------------------------------------------------------
 # RUN
@@ -126,4 +126,4 @@ def walk_forward(steps=10):
 try:
     walk_forward(steps=20)
 except KeyboardInterrupt:
-    print("Stopped")
+    print("Stopped safely")
