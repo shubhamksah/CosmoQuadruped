@@ -14,116 +14,111 @@ legs = {
 }
 
 # ------------------------------------------------------------
-# NEW CALIBRATED BASE ANGLES (YOUR VALUES)
+# YOUR BASE ANGLES
 # ------------------------------------------------------------
-base_angles = {
+base = {
     "FL": {"H": 100, "F": 141, "T": 132},
     "FR": {"H": 88,  "F": 47,  "T": 40},
     "BL": {"H": 96,  "F": 133, "T": 127},
     "BR": {"H": 94,  "F": 42,  "T": 49}
 }
 
-angles = {
-    leg: {j: base_angles[leg][j] for j in base_angles[leg]}
-    for leg in base_angles
-}
+angles = {leg: base[leg].copy() for leg in base}
 
 # ------------------------------------------------------------
 # APPLY NEUTRAL
 # ------------------------------------------------------------
 for leg in legs:
-    for joint in legs[leg]:
-        kit.servo[legs[leg][joint]].angle = angles[leg][joint]
+    for j in legs[leg]:
+        kit.servo[legs[leg][j]].angle = angles[leg][j]
 
 time.sleep(1)
 
 # ------------------------------------------------------------
-# TIBIA DIRECTION MAP (THIS FIXES EVERYTHING)
+# SIGN MAPS (CRITICAL)
 # ------------------------------------------------------------
-TIBIA_LIFT_SIGN = {
-    "FL": -1,
-    "BL": -1,
-    "FR": +1,
-    "BR": +1
+FEMUR_SIGN = {
+    "FL": +1, "BL": +1,
+    "FR": -1, "BR": -1
+}
+
+TIBIA_SIGN = {
+    "FL": -1, "BL": -1,
+    "FR": +1, "BR": +1
 }
 
 # ------------------------------------------------------------
-# SAFE GAIT PARAMETERS
+# GAIT PARAMETERS (REAL MOTION)
 # ------------------------------------------------------------
-STEP_FEMUR = 6     # push amount
-LIFT_TIBIA = 7     # lift amount (small on purpose)
-SUBSTEPS   = 12
-DT         = 0.03
+FEMUR_PUSH = 18      # THIS is what moves the robot
+TIBIA_COMP = 0.6     # poor-man’s IK ratio
+LIFT_TIBIA = 14
+
+SUB = 10
+DT = 0.025
 
 # ------------------------------------------------------------
-# SMOOTH MOVE
-# ------------------------------------------------------------
-def smooth_move(leg, joint, delta):
-    step = delta / SUBSTEPS
-    for _ in range(SUBSTEPS):
+def move_joint(leg, joint, delta):
+    step = delta / SUB
+    for _ in range(SUB):
         angles[leg][joint] += step
         kit.servo[legs[leg][joint]].angle = angles[leg][joint]
         time.sleep(DT)
 
 # ------------------------------------------------------------
-# LEG ACTIONS
+# FOOT STRAIGHT BACK (ON GROUND)
+# ------------------------------------------------------------
+def push_leg(leg):
+    df = FEMUR_SIGN[leg] * FEMUR_PUSH
+    dt = TIBIA_SIGN[leg] * (-TIBIA_COMP * FEMUR_PUSH)
+
+    move_joint(leg, "F", df)
+    move_joint(leg, "T", dt)
+
+# ------------------------------------------------------------
+# FOOT LIFT + RETURN
 # ------------------------------------------------------------
 def lift_leg(leg):
-    smooth_move(
-        leg,
-        "T",
-        TIBIA_LIFT_SIGN[leg] * LIFT_TIBIA
-    )
+    move_joint(leg, "T", TIBIA_SIGN[leg] * LIFT_TIBIA)
 
-def lower_leg(leg):
-    smooth_move(
-        leg,
-        "T",
-        -TIBIA_LIFT_SIGN[leg] * LIFT_TIBIA
-    )
+def drop_leg(leg):
+    move_joint(leg, "T", -TIBIA_SIGN[leg] * LIFT_TIBIA)
 
-def push_leg(leg):
-    smooth_move(leg, "F", STEP_FEMUR)
+def return_leg(leg):
+    df = -FEMUR_SIGN[leg] * FEMUR_PUSH
+    dt = TIBIA_SIGN[leg] * (TIBIA_COMP * FEMUR_PUSH)
 
-def reset_leg(leg):
-    smooth_move(leg, "F", -STEP_FEMUR)
+    move_joint(leg, "F", df)
+    move_joint(leg, "T", dt)
 
 # ------------------------------------------------------------
-# DIAGONAL STEP
+# DIAGONAL STEP — PERFECT SYNC
 # ------------------------------------------------------------
-def diagonal_step(lift_legs, push_legs):
-    for leg in lift_legs:
+def diagonal_step(pair_push, pair_lift):
+    # Lift diagonal
+    for leg in pair_lift:
         lift_leg(leg)
 
-    time.sleep(0.05)
-
-    for leg in push_legs:
+    # Push grounded diagonal (IN SYNC)
+    for leg in pair_push:
         push_leg(leg)
 
-    time.sleep(0.05)
+    # Drop lifted legs
+    for leg in pair_lift:
+        drop_leg(leg)
 
-    for leg in lift_legs:
-        lower_leg(leg)
-
-    time.sleep(0.05)
-
-    for leg in push_legs:
-        reset_leg(leg)
-
-    time.sleep(0.1)
+    # Return lifted legs forward
+    for leg in pair_lift:
+        return_leg(leg)
 
 # ------------------------------------------------------------
-# WALK LOOP
-# ------------------------------------------------------------
-def walk_forward(steps=10):
+def walk(steps=6):
     for _ in range(steps):
-        diagonal_step(["FL", "BR"], ["FR", "BL"])
         diagonal_step(["FR", "BL"], ["FL", "BR"])
+        diagonal_step(["FL", "BR"], ["FR", "BL"])
 
-# ------------------------------------------------------------
-# RUN
 # ------------------------------------------------------------
 try:
-    walk_forward(steps=20)
+    walk(steps=10)
 except KeyboardInterrupt:
-    print("Stopped safely")
+    print("Stopped")
