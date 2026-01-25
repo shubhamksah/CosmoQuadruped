@@ -70,10 +70,10 @@ legs = {
 # DOES NOT CHANGE THESE VALUES.
 # ------------------------------------------------------------
 base_angles = {
-    "FL": {"H": 100, "F": (96 + 45), "T": 90},
-    "FR": {"H": 88,  "F": (92 - 45), "T": 82},
-    "BL": {"H": 96,  "F": (88 + 45), "T": 85},
-    "BR": {"H": 94,  "F": (87 - 45), "T": 91}
+    "FL": {"H": 100, "F": (96 + 45), "T": 132},
+    "FR": {"H": 88,  "F": (92 - 45), "T": 40},
+    "BL": {"H": 96,  "F": (88 + 45), "T": 127},
+    "BR": {"H": 94,  "F": (87 - 45), "T": 49}
 }
 
 
@@ -167,6 +167,39 @@ def get_key():
 # - Despite horn differences, POSITIVE tibia always = BODY UP
 # ------------------------------------------------------------
 
+# ------------------------------------------------------------
+# PHYSICAL → SERVO DIRECTION MULTIPLIERS
+#
+# These values convert a PHYSICAL joint intent into the
+# correct servo angle delta for each leg.
+#
+# +1 means: servo angle increases
+# -1 means: servo angle decreases
+#
+# This table is derived DIRECTLY from the joint direction
+# reference above and MUST NOT BE MODIFIED casually.
+# ------------------------------------------------------------
+direction = {
+    "H": {   # Hip
+        "FL": +1,
+        "FR": +1,
+        "BL": -1,
+        "BR": -1,
+    },
+    "F": {   # Femur
+        "FL": +1,
+        "BL": +1,
+        "FR": -1,
+        "BR": -1,
+    },
+    "T": {   # Tibia (EXTEND = BODY UP)
+        "FL": +1,
+        "BL": +1,
+        "FR": -1,
+        "BR": -1,
+    }
+}
+
 
 # ------------------------------------------------------------
 # TWEAK A SINGLE JOINT WITH LIVE FEEDBACK
@@ -189,6 +222,38 @@ def tweak_servo(leg, joint, servo_index):
         kit.servo[servo_index].angle = angles[leg][joint]
         print(f"{leg} {joint} angle: {angles[leg][joint]}°   ", end="\r")
 
+def tweak_group_physical(joint):
+    print(f"\nTweaking ALL {joint} joints (PHYSICAL MOTION)")
+    print("↑ = physical positive | ↓ = physical negative | q = done\n")
+
+    while True:
+        key = get_key()
+
+        if key == "\x1b[A":
+            physical_delta = +1
+        elif key == "\x1b[B":
+            physical_delta = -1
+        elif key.lower() == "q":
+            print("\nFinal angles:")
+            for leg in legs:
+                print(f"{leg} {joint}: {angles[leg][joint]}°")
+            print()
+            break
+        else:
+            continue
+
+        for leg in legs:
+            servo_delta = physical_delta * direction[joint][leg]
+            new_angle = angles[leg][joint] + servo_delta
+
+            if 0 <= new_angle <= 180:
+                angles[leg][joint] = new_angle
+                kit.servo[legs[leg][joint]].angle = new_angle
+
+        status = " | ".join(
+            f"{leg}:{angles[leg][joint]}°" for leg in legs
+        )
+        print(status + "   ", end="\r")
 
 # ------------------------------------------------------------
 # MAIN PROGRAM LOOP
@@ -198,26 +263,29 @@ def main():
     print("Perspective: FROM BEHIND, looking toward head")
     print("Legs: FL FR BL BR")
     print("Joints: H = Hip | F = Femur | T = Tibia")
-    print("Group Movement: ALL_T for Tibias, ALL_F for Femurs, ALL_H for Hips")
     print("Type 'exit' to quit\n")
 
     try:
         while True:
-            leg = input("Leg: ").upper()
-            if leg == "EXIT":
+            cmd = input("Leg / Group: ").upper()
+            if cmd == "EXIT":
                 break
-            if leg not in legs:
-                print("Invalid leg")
+
+            if cmd in ["ALL_H", "ALL_F", "ALL_T"]:
+                tweak_group_physical(cmd[-1])
+                continue
+
+            if cmd not in legs:
+                print("Invalid leg or group")
                 continue
 
             joint = input("Joint (H/F/T): ").upper()
-            if joint == "EXIT":
-                break
-            if joint not in legs[leg]:
+            if joint not in legs[cmd]:
                 print("Invalid joint")
                 continue
 
-            tweak_servo(leg, joint, legs[leg][joint])
+            tweak_servo(cmd, joint, legs[cmd][joint])
+
 
     except KeyboardInterrupt:
         print("\nExiting...")
