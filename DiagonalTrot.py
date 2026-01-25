@@ -31,7 +31,6 @@ angles = {leg: base[leg].copy() for leg in base}
 for leg in legs:
     for j in legs[leg]:
         kit.servo[legs[leg][j]].angle = angles[leg][j]
-
 time.sleep(1)
 
 # ------------------------------------------------------------
@@ -43,64 +42,87 @@ TIBIA_SIGN = {"FL": -1, "BL": -1, "FR": +1, "BR": +1}
 # ------------------------------------------------------------
 # GAIT PARAMETERS
 # ------------------------------------------------------------
-FEMUR_PUSH = 18
-TIBIA_COMP = 0.6
-LIFT_TIBIA = 14
-
+FEMUR_PUSH = 18      # push back distance
+LIFT_TIBIA = 14      # leg lift height
 SUB = 10
-DT = 0.025
+DT = 0.02
 
 # ------------------------------------------------------------
-# SYNC JOINT MOVEMENT
+# KINEMATICS-LIKE FOOT CONTROL
 # ------------------------------------------------------------
-def move_joints_sync(joint_moves, steps=SUB, dt=DT):
-    step_deltas = [(leg, joint, delta / steps) for leg, joint, delta in joint_moves]
-    for _ in range(steps):
-        for leg, joint, step in step_deltas:
-            angles[leg][joint] += step
-            kit.servo[legs[leg][joint]].angle = angles[leg][joint]
-        time.sleep(dt)
+def move_leg_path(leg, path_points):
+    """
+    Move a leg along a path in small increments.
+    path_points: list of tuples (delta_femur, delta_tibia)
+    """
+    for df, dt in path_points:
+        angles[leg]["F"] += df
+        angles[leg]["T"] += dt
+        kit.servo[legs[leg]["F"]].angle = angles[leg]["F"]
+        kit.servo[legs[leg]["T"]].angle = angles[leg]["T"]
+        time.sleep(DT)
 
 # ------------------------------------------------------------
-# FOOT PUSH ON GROUND
+# DEFINE TRIANGLE PATH
 # ------------------------------------------------------------
-def push_legs(legs_to_push):
-    joint_moves = []
-    for leg in legs_to_push:
-        df = FEMUR_SIGN[leg] * FEMUR_PUSH
-        dt = TIBIA_SIGN[leg] * (-TIBIA_COMP * FEMUR_PUSH)
-        joint_moves.append((leg, "F", df))
-        joint_moves.append((leg, "T", dt))
-    move_joints_sync(joint_moves)
+def triangle_leg_motion(leg):
+    """
+    Moves leg in a triangle pattern:
+    1. Stance (down)
+    2. Push back (foot stays low, maybe slightly down)
+    3. Lift + swing forward
+    """
+    # Divide each movement into SUB steps
+    df_push = FEMUR_SIGN[leg] * FEMUR_PUSH / SUB
+    dt_push = TIBIA_SIGN[leg] * 0  # stay flat (no lift)
+    
+    df_swing = -FEMUR_SIGN[leg] * FEMUR_PUSH / SUB
+    dt_swing = TIBIA_SIGN[leg] * LIFT_TIBIA / SUB
 
-# ------------------------------------------------------------
-# LIFT, DROP, RETURN
-# ------------------------------------------------------------
-def lift_legs(legs_to_lift):
-    joint_moves = [(leg, "T", TIBIA_SIGN[leg] * LIFT_TIBIA) for leg in legs_to_lift]
-    move_joints_sync(joint_moves)
+    # 1. Push back
+    push_path = [(df_push, dt_push) for _ in range(SUB)]
+    move_leg_path(leg, push_path)
 
-def drop_legs(legs_to_lift):
-    joint_moves = [(leg, "T", -TIBIA_SIGN[leg] * LIFT_TIBIA) for leg in legs_to_lift]
-    move_joints_sync(joint_moves)
+    # 2. Lift & swing forward
+    swing_path = [(df_swing, dt_swing) for _ in range(SUB)]
+    move_leg_path(leg, swing_path)
 
-def return_legs(legs_to_lift):
-    joint_moves = []
-    for leg in legs_to_lift:
-        df = -FEMUR_SIGN[leg] * FEMUR_PUSH
-        dt = TIBIA_SIGN[leg] * (TIBIA_COMP * FEMUR_PUSH)
-        joint_moves.append((leg, "F", df))
-        joint_moves.append((leg, "T", dt))
-    move_joints_sync(joint_moves)
+    # 3. Drop down
+    drop_path = [(0, -dt_swing) for _ in range(SUB)]
+    move_leg_path(leg, drop_path)
 
 # ------------------------------------------------------------
 # DIAGONAL STEP
 # ------------------------------------------------------------
 def diagonal_step(pair_push, pair_lift):
-    lift_legs(pair_lift)
-    push_legs(pair_push)
-    drop_legs(pair_lift)
-    return_legs(pair_lift)
+    # Move lifted legs simultaneously
+    for i in range(SUB):
+        for leg in pair_lift:
+            df = 0
+            dt = (TIBIA_SIGN[leg] * LIFT_TIBIA) / SUB
+            angles[leg]["T"] += dt
+            kit.servo[legs[leg]["T"]].angle = angles[leg]["T"]
+
+        # Push grounded legs back simultaneously
+        for leg in pair_push:
+            df = FEMUR_SIGN[leg] * FEMUR_PUSH / SUB
+            dt = 0
+            angles[leg]["F"] += df
+            angles[leg]["T"] += dt
+            kit.servo[legs[leg]["F"]].angle = angles[leg]["F"]
+            kit.servo[legs[leg]["T"]].angle = angles[leg]["T"]
+        time.sleep(DT)
+
+    # Swing lifted legs forward
+    for i in range(SUB):
+        for leg in pair_lift:
+            df = -FEMUR_SIGN[leg] * FEMUR_PUSH / SUB
+            dt = -TIBIA_SIGN[leg] * LIFT_TIBIA / SUB
+            angles[leg]["F"] += df
+            angles[leg]["T"] += dt
+            kit.servo[legs[leg]["F"]].angle = angles[leg]["F"]
+            kit.servo[legs[leg]["T"]].angle = angles[leg]["T"]
+        time.sleep(DT)
 
 # ------------------------------------------------------------
 # WALK FUNCTION
